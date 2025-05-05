@@ -1,0 +1,25 @@
+#!/bin/bash
+
+
+# brew install nvim
+
+
+config_dir="${HOME}/.config"
+mkdir -p "${config_dir}"
+
+
+if [ ! -d "${config_dir}/nvim" ]
+then
+  echo "Copying nvim config to ${config_dir}/nvim" 
+  cp -r ./nvim "${config_dir}"
+else
+  echo "File: ${lua_config} exists. Do you want to use the old config?"
+  # TODO: Add prompt here if hit enter, Yes, Y, yes, y. Don't delete the file. Otherwise remove the file and create a new one 
+  # TODO: Additional to remove the file 
+	# TODO: Remove this, this is temporary only
+  cp -r ./nvim "${config_dir}"
+fi
+
+
+
+
