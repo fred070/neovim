@@ -1,8 +1,10 @@
 #!/bin/bash
 
 
-# brew install nvim
-
+# brew install neovim ripgrep
+# yum install neovim yum-utils 
+# yum-config-manager --add-repo=https://copr.fedorainfracloud.org/coprs/carlwgeorge/ripgrep/repo/epel-7/carlwgeorge-ripgrep-epel-7.repo
+# yum install ripgrep
 
 config_dir="${HOME}/.config"
 mkdir -p "${config_dir}"

@@ -110,7 +110,7 @@ source $ZSH/oh-my-zsh.sh
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 
 alias c=clear \
-			v=nvim
+      v=nvim
 
 # Invoke `ls` (list) command after changing directory (i.e., `cd`)
 chpwd() l

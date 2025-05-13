@@ -2,8 +2,8 @@ export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/.*"'
 export FZF_HIDDEN_COMMAND='find . -type f'
 
 alias f="fzf --style minimal \
-    --preview='bat --color=always {}' \
-    --bind 'focus:transform-header:file --brief {}'"
+  --preview='bat --color=always {}' \
+  --bind 'focus:transform-header:file --brief {}'"
 
 alias fe="f --multi --bind 'enter:become(nvim {+})'"
 
