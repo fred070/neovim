@@ -1,40 +1,25 @@
-# Kubernetes Workload Metrics with Severity Levels and Thresholds
+# Kubernetes Resource Usage Metrics (Node, Pod, Container, Tenant)
 
-This table tracks Kubernetes workload metrics to assess health, availability, and performance of deployed applications. These metrics are vital for SRE, DevOps, and platform teams to ensure SLAs and reliability.
+This table lists resource usage metrics across different Kubernetes layers, along with descriptions, thresholds, severity levels, and user impact.
 
----
+| Layer       | Category        | Metric                                                        | Description                                                | Threshold                     | Severity  | Alert Condition                      | User Impact                                           |
+|-------------|------------------|----------------------------------------------------------------|------------------------------------------------------------|-------------------------------|-----------|--------------------------------------|-------------------------------------------------------|
+| Node        | CPU Usage        | `node_cpu_seconds_total`                                      | Total CPU usage per node                                   | >90% sustained                | Critical  | Sustained >90% for 2 intervals       | Node pressure, throttling                             |
+| Node        | Memory Usage     | `node_memory_Active_bytes`                                    | Used memory on the node                                    | >90%                          | Critical  | Sustained >90%                       | OOM kills, eviction risk                              |
+| Node        | Disk Usage       | `node_filesystem_usage`                                       | Filesystem usage on nodes                                  | >85%                          | Warning   | Sustained for 2 intervals            | Pod scheduling failures, eviction                     |
+| Pod         | CPU Usage        | `container_cpu_usage_seconds_total`                           | CPU used by container within a pod                         | >90% of limit (if set)        | Warning   | Sustained >90% usage                 | Throttling, degraded performance                      |
+| Pod         | Memory Usage     | `container_memory_usage_bytes`                                | Memory used by container                                   | >85% of limit (if set)        | Critical  | OOM kill or eviction risk            | Container restarts, app failure                       |
+| Pod         | Disk Usage       | `container_fs_usage_bytes`                                    | Disk usage by container                                    | >90% of ephemeral limit       | Warning   | DiskPressure risk                    | Write failures, eviction                              |
+| Pod         | Pod Restarts     | `kube_pod_container_status_restarts_total`                    | Container restart count                                    | >3 per hour                   | Warning   | More than 3 restarts/hour            | App crash loops, instability                          |
+| Container   | CPU Throttle     | `container_cpu_cfs_throttled_seconds_total`                   | Time container was throttled                               | Increasing >5% of runtime     | Warning   | Sustained throttle spikes            | Performance degradation                              |
+| Container   | Memory Failures  | `container_memory_failcnt`                                    | Times memory allocation failed                             | >0                            | Critical  | Memory pressure                      | Potential OOMs                                        |
+| Tenant      | CPU Usage        | `capsule_tenant_cpu_usage_cores`                              | CPU usage across tenant namespaces                         | >90% of quota                 | Critical  | Sustained >90%                       | Quota enforcement, tenant throttling                  |
+| Tenant      | CPU Quota        | `capsule_tenant_cpu_quota_cores`                              | Allocated CPU quota for tenant                             | N/A                           | Info      | Tracked for monitoring               | Planning resource guarantees                          |
+| Tenant      | Memory Usage     | `capsule_tenant_memory_usage_bytes`                           | Memory usage across tenant namespaces                      | >85% of quota                 | Critical  | Sustained >85%                       | OOM kills, service failures                           |
+| Tenant      | Memory Quota     | `capsule_tenant_memory_quota_bytes`                           | Allocated memory quota                                     | N/A                           | Info      | Tracked                              | Resource planning                                     |
+| Tenant      | Ephemeral Storage| `capsule_tenant_ephemeral_storage_usage_bytes`                | Ephemeral disk usage per tenant                            | >90% of quota                 | Warning   | Sustained high usage                 | Disk eviction, storage pressure                       |
+| Tenant      | PVC Usage        | `capsule_tenant_pvc_storage_usage_bytes`                      | PVC usage across tenant                                    | >90% of total quota           | Warning   | Sustained high usage                 | Storage depletion                                     |
+| Tenant      | PVC Quota        | `capsule_tenant_pvc_storage_quota_bytes`                      | Allocated PVC quota for tenant                             | N/A                           | Info      | Monitored                            | Storage planning                                     |
+| Tenant      | Pod Count        | `capsule_tenant_pods_total`                                   | Number of running pods in tenant                           | >95% of max (if defined)      | Warning   | Reached tenant pod limit             | New deployments blocked                               |
+| Tenant      | Namespace Count  | `capsule_tenant_namespaces_total`                             | Number of namespaces under tenant                          | >90% of limit                 | Warning   | Namespace creation blocked           | Admin bottlenecks                                     |
 
-## Kubernetes Workload Metrics Table (Sorted by Category and Severity)
-
-| Category             | Metric                                              | Description                                               | Threshold                     | Severity  | Alert Condition                      | User Impact                                                  |
-|----------------------|------------------------------------------------------|-----------------------------------------------------------|-------------------------------|-----------|--------------------------------------|--------------------------------------------------------------|
-| Pod Availability     | `kube_pod_status_phase{phase="Failed"}`             | Number of failed Pods                                      | >0                            | Critical  | >0 for 1 interval                    | Immediate app crash or failure                               |
-| Pod Availability     | `kube_pod_status_ready{condition="true"}`           | Number of ready pods                                       | <desired replica count        | Critical  | Missing pods for 2 intervals         | Application not fully available                              |
-| Deployment Health    | `kube_deployment_status_replicas_unavailable`       | Unavailable replicas in a deployment                       | >0                            | Critical  | >0 for 2 intervals                   | Service degradation or outage                                |
-| Deployment Health    | `kube_deployment_spec_replicas`                     | Desired replica count                                      | Sudden drop >30%              | Warning   | Drop sustained for 3 intervals       | Possible misconfiguration or autoscaling issue               |
-| ReplicaSet Health    | `kube_replicaset_status_ready_replicas`             | Ready replicas in a ReplicaSet                             | <desired replica count        | Critical  | Mismatch for 2 intervals             | App instances missing or restarting                          |
-| Pod Lifecycle        | `kube_pod_container_status_terminated_reason`       | Termination reasons for containers                         | Frequent non-zero exits       | Warning   | Spike >3x baseline                   | Crashes due to config, resource, or code issue               |
-| Pod Lifecycle        | `kube_pod_container_status_restarts_total`          | Restart count for containers                               | >5 restarts/hour              | Warning   | Sustained for 3 intervals            | Stability issues or crash loops                              |
-| Scheduling           | `kube_pod_status_scheduled{condition="false"}`      | Unschedulable Pods                                         | >0                            | Critical  | >0 for 1 interval                    | Node pressure, taints, or resource exhaustion                |
-| DaemonSet Health     | `kube_daemonset_status_number_unavailable`          | Unavailable Pods in a DaemonSet                            | >0                            | Warning   | >0 for 3 intervals                   | Logging/monitoring/infra agents missing                      |
-| Resource Requests    | `kube_pod_container_resource_requests_cpu_cores`    | CPU requested by pods                                      | Sudden spike >50% baseline    | Warning   | Spike sustained for 3 intervals      | Risk of cluster CPU exhaustion                               |
-| Resource Requests    | `kube_pod_container_resource_requests_memory_bytes` | Memory requested by pods                                   | Sudden spike >50% baseline    | Warning   | Spike sustained for 3 intervals      | Risk of memory saturation                                    |
-| Job Failures         | `kube_job_status_failed`                            | Number of failed Job executions                            | >0                            | Warning   | >0 for 1 interval                    | Batch jobs not completing                                    |
-| Job Completion       | `kube_job_status_succeeded`                         | Number of successful Job executions                        | Sudden drop to 0              | Warning   | Drop for 2 intervals                 | CronJobs or batch workflows stalling                         |
-| Horizontal Scaling   | `kube_horizontalpodautoscaler_status_desired_replicas` | Desired replicas under autoscaler                     | Stuck at high/low for 5 min    | Warning   | No change over 3 intervals           | HPA misbehaving, possibly due to metric/config error         |
-| Deployment Rollout   | `kube_deployment_status_observed_generation`        | Tracks deployment rollout completion                       | Lagging >2 behind generation  | Warning   | Mismatch for 3 intervals             | Rollouts not finishing or stuck                              |
-| Init Containers      | `kube_pod_init_container_status_terminated_reason`  | Termination reasons for init containers                    | Frequent retries or errors    | Warning   | Spike >2x baseline                   | Init script/config failure delaying pod startup              |
-
----
-
-## Explanation
-
-- **Alert Condition**: Defines the rule for firing an alert, typically requiring breach over multiple evaluation intervals (to reduce false positives).
-- **Severity**:
-  - **Critical**: Direct availability or stability impact. Should trigger on-call.
-  - **Warning**: Performance degradation, misconfiguration, or impending failures. Action needed but may not need immediate escalation.
-- **User Impact**: Indicates how the metric degradation could affect end-users or the platform.
-
----
-
-Let me know if you'd like dashboards or alert rules (e.g., Prometheus or Grafana) for these workload metrics.
