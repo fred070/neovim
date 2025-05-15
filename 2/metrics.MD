@@ -51,3 +51,21 @@
 | `process_resident_memory_bytes` | >1.5GB | Node pressure risk | Memory >1.5GB | Sustained 10 min |
 | `process_cpu_seconds_total` | >80% core usage | Latency, node contention | High sustained CPU usage | 10 min average |
 | `go_threads` | >1000 | Memory/thread leak | Threads >1000 | Continuous 5m |
+
+## 🛡️ Security
+
+| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
+|--------|-----------|-------------|------------------|--------------------|
+| `apiserver_audit_event_total` | Unusual spike | Potential abuse or policy gaps | >3x baseline | 10 min rate |
+| `apiserver_envelope_encryption_dek_cache_misses_total` | >0 | Encryption cache misses | >10 misses/min | Over 5 min |
+| `apiserver_envelope_encryption_key_fetch_failures_total` | >0 | Encryption backend failure | Any increase | Δ > 0 over 5 min |
+| `apiserver_tls_handshake_errors_total` | >0 | TLS misconfig or MITM | Any increase | Δ > 0 over 5 min |
+
+## 📈 Usage Patterns
+
+| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
+|--------|-----------|-------------|------------------|--------------------|
+| `apiserver_request_total{verb="WATCH"}` | Sustained increase | High client activity | >2x normal watch traffic | Over 10 min |
+| `apiserver_request_total{verb="LIST"}` | Sustained increase | Expensive API calls | >2x baseline LIST traffic | Over 10 min |
+| `apiserver_request_total{verb="PATCH"}` | Increase >50% | High config churn | Δ >50% compared to prior window | 15 min window |
+| `apiserver_request_total{verb="DELETE"}` | Spike in DELETEs | Risk of accidental data loss | Spike >200% normal | 5 min rate |
