@@ -1,71 +1,74 @@
-# 📊 Kubernetes API Server Metrics – Categories, Thresholds, and Alerts
+## Kubernetes API Server Metrics with Severity Levels and Thresholds
 
-## 🧠 Capacity & Request Volume
+This table categorizes key Kubernetes API server metrics by functional area, and provides suggested thresholds and severity levels for alerting.
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_request_total` | >1000 requests/sec per API server | Possible overload | High sustained volume | 5 min rate |
-| `apiserver_current_inflight_requests` | >150 read, >50 write | API latency or 429s | Read >150 or Write >50 | ≥2 consecutive intervals |
-| `apiserver_longrunning_gauge` | >10 long-running requests | Slower watch/list responses | Gauge value >10 | Sustained 5 minutes |
-| `apiserver_registered_watchers` | Spike >300 in 5 min | Memory pressure | Increase >300 | 5 min delta |
+### Capacity & Request Volume
 
-## ⚡ Performance & Latency
+| Metric                                                      | Description                             | Threshold     | Severity | User Impact                                            |
+| ----------------------------------------------------------- | --------------------------------------- | ------------- | -------- | ------------------------------------------------------ |
+| `apiserver_request_total`                                   | Total API requests per second           | >1000 req/sec | Warning  | Potential API load surge, may lead to degraded latency |
+| `apiserver_current_inflight_requests{request_kind="write"}` | Concurrent in-flight write requests     | >50           | Critical | Write latency or throttling, possible 429s             |
+| `apiserver_current_inflight_requests{request_kind="read"}`  | Concurrent in-flight read requests      | >150          | Warning  | Read latency under burst load                          |
+| `apiserver_longrunning_gauge`                               | Number of ongoing long-running requests | >50 sustained | Warning  | Resource pressure from watch/log sessions              |
+| `apiserver_registered_watchers`                             | Active registered watchers              | >300          | Warning  | High memory/CPU usage, potential overload              |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_request_duration_seconds{quantile="0.95"}` | >1.0s | User-facing slowness | P95 >1.0s | 5 of 6 points (5-min) |
-| `apiserver_response_sizes_bucket` | >10% >1MB | Serialization/bloat | >10% responses >1MB | Over 10 min |
-| `apiserver_dropped_requests_total` | >0 | Throttling | Any increase | Δ > 0 over 5 min |
-| `apiserver_request_terminations_total` | >0 | Client disconnects | Any increment | Δ > 0 over 5 min |
+### Performance & Latency
 
-## 🔐 Authentication & Authorization
+| Metric                                                | Description                          | Threshold | Severity | User Impact                                  |
+| ----------------------------------------------------- | ------------------------------------ | --------- | -------- | -------------------------------------------- |
+| `apiserver_request_duration_seconds{quantile="0.95"}` | 95th percentile API latency          | >1s       | Critical | Users see API timeouts or retries            |
+| `apiserver_response_sizes_bucket`                     | Distribution of API response sizes   | >10% >1MB | Warning  | Large responses could slow clients           |
+| `apiserver_dropped_requests_total`                    | Dropped API requests due to overload | >0        | Critical | API calls dropped or denied                  |
+| `apiserver_request_terminations_total`                | Requests terminated by the server    | >0        | Warning  | Possible client disconnects or node pressure |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_authentication_attempts_total{result="failure"}` | >1% failures | 401s / access denial | Failure rate >1% | 10 min average |
-| `apiserver_authorization_attempts_total{result="failure"}` | >5% failures | 403s / RBAC errors | Failure rate >5% | 10 min window |
-| `apiserver_authentication_duration_seconds{quantile="0.99"}` | >0.5s | Login/API delay | P99 >0.5s | 5 min window |
-| `apiserver_authorization_duration_seconds{quantile="0.99"}` | >0.5s | Rule eval slowness | P99 >0.5s | 5 min window |
+### Authentication & Authorization
 
-## 💾 Etcd & Storage Backend
+| Metric                                                       | Description                        | Threshold     | Severity | User Impact                             |
+| ------------------------------------------------------------ | ---------------------------------- | ------------- | -------- | --------------------------------------- |
+| `apiserver_authentication_attempts_total{result="failure"}`  | Failed authentication attempts     | >1% fail rate | Warning  | Invalid credentials, login issues       |
+| `apiserver_authorization_attempts_total{result="failure"}`   | Failed authorization requests      | >5% fail rate | Warning  | Permissions denied unexpectedly         |
+| `apiserver_authentication_duration_seconds{quantile="0.99"}` | 99th percentile auth time          | >0.5s         | Warning  | Slower login and client requests        |
+| `apiserver_authorization_duration_seconds{quantile="0.99"}`  | 99th percentile RBAC decision time | >0.5s         | Warning  | Slower response on RBAC-evaluated calls |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_storage_duration_seconds{quantile="0.99"}` | >1.5s | API timeout risk | P99 >1.5s | 5 min window |
-| `apiserver_storage_transformation_duration_seconds` | >0.5s | Encrypted access delay | >0.5s consistently | 5 min window |
-| `etcd_request_duration_seconds{quantile="0.99"}` | >1.0s | Etcd bottleneck | P99 >1.0s | 5 min window |
-| `apiserver_storage_objects` | Growth >10% in 1h | Resource scaling issues | Sudden growth trend | Hourly delta |
+### Etcd & Storage Backend
 
-## 📡 Watches & Events
+| Metric                                                | Description                   | Threshold          | Severity | User Impact                                  |
+| ----------------------------------------------------- | ----------------------------- | ------------------ | -------- | -------------------------------------------- |
+| `apiserver_storage_duration_seconds{quantile="0.99"}` | Storage backend response time | >1.5s              | Critical | API calls time out or fail                   |
+| `apiserver_storage_transformation_duration_seconds`   | Encryption/decryption delay   | >0.5s              | Warning  | Latency increase for sensitive resources     |
+| `etcd_request_duration_seconds{quantile="0.99"}`      | Etcd backend latency          | >1.0s              | Critical | Slowness on persistent resource updates      |
+| `apiserver_storage_objects`                           | Number of objects in storage  | Growth >10% in 1hr | Warning  | Possible storage bloat or runaway controller |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_watch_events_total` | Rate spike >2x | API/client pressure | Sudden spike | Over 10 min |
-| `apiserver_watch_cache_capacity_in_use / capacity` | >0.85 | Evictions, stale reads | Utilization >85% | 3 of 5 checks |
-| `apiserver_watch_duration_seconds{quantile="0.99"}` | >1h | Lingering or stale watches | Watch duration >1h | Continuous 15m |
+### Watches & Event Distribution
 
-## 🧰 System Health & Resources
+| Metric                                              | Description                    | Threshold    | Severity | User Impact                                  |
+| --------------------------------------------------- | ------------------------------ | ------------ | -------- | -------------------------------------------- |
+| `apiserver_watch_events_total`                      | Events dispatched to watchers  | >2x baseline | Warning  | Resource pressure, event lag                 |
+| `apiserver_watch_cache_capacity_in_use / capacity`  | Watch cache utilization        | >85%         | Warning  | Risk of cache eviction, degraded performance |
+| `apiserver_watch_duration_seconds{quantile="0.99"}` | 99th percentile watch duration | >1h          | Warning  | Persistent watchers may be leaking           |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `process_resident_memory_bytes` | >1.5GB | Node pressure risk | Memory >1.5GB | Sustained 10 min |
-| `process_cpu_seconds_total` | >80% core usage | Latency, node contention | High sustained CPU usage | 10 min average |
-| `go_threads` | >1000 | Memory/thread leak | Threads >1000 | Continuous 5m |
+### System Health & Resources
 
-## 🛡️ Security
+| Metric                          | Description                | Threshold       | Severity | User Impact                         |
+| ------------------------------- | -------------------------- | --------------- | -------- | ----------------------------------- |
+| `process_resident_memory_bytes` | Memory usage of API server | >1.5GB          | Warning  | Resource saturation, potential OOM  |
+| `process_cpu_seconds_total`     | CPU time consumed          | >80% core usage | Warning  | Node pressure, degraded performance |
+| `go_threads`                    | Number of Go threads       | >1000           | Warning  | Possible goroutine leaks            |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_audit_event_total` | Unusual spike | Potential abuse or policy gaps | >3x baseline | 10 min rate |
-| `apiserver_envelope_encryption_dek_cache_misses_total` | >0 | Encryption cache misses | >10 misses/min | Over 5 min |
-| `apiserver_envelope_encryption_key_fetch_failures_total` | >0 | Encryption backend failure | Any increase | Δ > 0 over 5 min |
-| `apiserver_tls_handshake_errors_total` | >0 | TLS misconfig or MITM | Any increase | Δ > 0 over 5 min |
+### Security Events
 
-## 📈 Usage Patterns
+| Metric                                                   | Description               | Threshold        | Severity | User Impact                                  |
+| -------------------------------------------------------- | ------------------------- | ---------------- | -------- | -------------------------------------------- |
+| `apiserver_audit_event_total`                            | Audit events recorded     | Spike >3x normal | Warning  | Possible config change or attack vector      |
+| `apiserver_envelope_encryption_dek_cache_misses_total`   | Missed cached DEK fetches | >10 misses/min   | Warning  | Extra latency for encrypted resources        |
+| `apiserver_envelope_encryption_key_fetch_failures_total` | Key retrieval failures    | >0               | Critical | Encryption failures, possible data loss risk |
+| `apiserver_tls_handshake_errors_total`                   | TLS handshake failures    | >0               | Warning  | Misconfigured clients or expired certs       |
 
-| Metric | Threshold | User Impact | Alert Condition | Evaluation Window |
-|--------|-----------|-------------|------------------|--------------------|
-| `apiserver_request_total{verb="WATCH"}` | Sustained increase | High client activity | >2x normal watch traffic | Over 10 min |
-| `apiserver_request_total{verb="LIST"}` | Sustained increase | Expensive API calls | >2x baseline LIST traffic | Over 10 min |
-| `apiserver_request_total{verb="PATCH"}` | Increase >50% | High config churn | Δ >50% compared to prior window | 15 min window |
-| `apiserver_request_total{verb="DELETE"}` | Spike in DELETEs | Risk of accidental data loss | Spike >200% normal | 5 min rate |
+### Usage Patterns & Access
+
+| Metric                                   | Description            | Threshold     | Severity           | User Impact                         |
+| ---------------------------------------- | ---------------------- | ------------- | ------------------ | ----------------------------------- |
+| `apiserver_request_total{verb="WATCH"}`  | Volume of WATCH calls  | >2x baseline  | Warning            | Client overuse or watch abuse       |
+| `apiserver_request_total{verb="LIST"}`   | Volume of LIST calls   | >2x baseline  | Warning            | Heavy dashboard use or lister loops |
+| `apiserver_request_total{verb="PATCH"}`  | Volume of PATCH calls  | >50% increase | Warning            | Controllers over-patching objects   |
+| `apiserver_request_total{verb="DELETE"}` | Volume of DELETE calls | >200% normal  | Warning / Critical | Risk of mass deletion or DoS        |
