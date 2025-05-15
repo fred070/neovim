@@ -1,48 +1,56 @@
-# Kubernetes Controller Manager Metrics with Severity Levels and Thresholds
+# Kubernetes etcd Metrics with Severity Levels and Thresholds
 
-This document summarizes critical Controller Manager metrics, categorized by functional areas such as capacity, performance, health, security, and usage, along with suggested alert thresholds, severity levels, alert conditions, and user impact.
+This document summarizes key etcd metrics, categorized by functional areas such as capacity, performance, health, security, and usage, along with suggested alert thresholds, severity levels, alert conditions, and user impact.
 
 ---
 
-## Controller Manager Metrics Table (Sorted by Category and Severity)
+## etcd Metrics Table (Sorted by Category and Severity)
 
-| Category   | Metric                                              | Description                                    | Threshold        | Severity  | Alert Condition                   | User Impact                                     |
-|------------|-----------------------------------------------------|------------------------------------------------|------------------|-----------|---------------------------------|-------------------------------------------------|
-| Capacity   | `controller_manager_workqueue_depth`                | Depth of the controller workqueue              | >100             | Critical  | >100 for 2 consecutive intervals| Severe backlog, risk of stale cluster state      |
-| Capacity   | `controller_manager_workqueue_length`               | Number of items pending in controller queues  | >50              | Warning   | >50 for 2 consecutive intervals | Controllers backlog, delayed reconciliation     |
-| Performance| `controller_manager_workqueue_latency_seconds`      | Time to process workqueue items (95th percentile) | >5s            | Critical  | >5s sustained over 3 intervals  | Slow reconciliation, delayed resource updates   |
-| Performance| `controller_manager_reconcile_errors_total`         | Total reconcile errors count                    | >5 errors/min     | Warning   | >5 errors per minute             | Resource reconciliation failures                 |
-| Performance| `controller_manager_reconcile_duration_seconds`     | Duration of reconcile loops                      | >10s             | Warning   | >10s for 3 consecutive intervals | Slow controller processing                        |
-| Health     | `process_resident_memory_bytes`                      | Memory used by controller manager process       | >1.2GB           | Warning   | >1.2GB for 5 minutes             | Resource exhaustion, potential OOM                |
-| Health     | `process_cpu_seconds_total`                           | CPU usage of controller manager                  | >80% core usage  | Warning   | >80% sustained for 5 minutes    | Node pressure, degraded controller performance   |
-| Health     | `go_goroutines`                                       | Number of goroutines                              | >800             | Warning   | >800 for 5 minutes               | Potential goroutine leaks                          |
-| Security   | `controller_manager_tls_handshake_errors_total`      | TLS handshake failures                            | >0               | Warning   | Any failure                     | Misconfigured clients or cert issues              |
-| Security   | `controller_manager_authentication_errors_total`     | Authentication failures on controller manager    | >0               | Warning   | Any failure                     | Authentication problems, degraded communication  |
-| Security   | `controller_manager_authorization_errors_total`      | Authorization failures                            | >0               | Warning   | Any failure                     | RBAC misconfigurations                             |
-| Usage      | `controller_manager_leader_elections_failed_total`   | Leader election failures                          | >0               | Critical  | Any failure                    | Controller Manager instability                     |
-| Usage      | `controller_manager_leader_elections_succeeded_total`| Successful leader elections                        | N/A              | Info      | N/A                            | Operational normality                              |
+| Category    | Metric                                    | Description                                     | Threshold          | Severity  | Alert Condition                   | User Impact                                     |
+|-------------|-------------------------------------------|------------------------------------------------|--------------------|-----------|---------------------------------|-------------------------------------------------|
+| Capacity    | `etcd_disk_wal_fsync_duration_seconds`    | Time taken to fsync WAL writes                   | >0.1s              | Critical  | >0.1s for 3 consecutive intervals| Disk I/O bottleneck, risking data loss          |
+| Capacity    | `etcd_disk_backend_commit_duration_seconds` | Backend commit latency                           | >0.2s              | Critical  | >0.2s for 3 consecutive intervals| Slow disk writes, impacting etcd performance    |
+| Performance| `etcd_network_client_grpc_received_bytes_total` | Total bytes received over gRPC                   | Spike >2x baseline | Warning   | Spike lasting >5 minutes          | Network congestion impacting etcd traffic       |
+| Performance| `etcd_network_client_grpc_sent_bytes_total`     | Total bytes sent over gRPC                        | Spike >2x baseline | Warning   | Spike lasting >5 minutes          | Network congestion impacting etcd traffic       |
+| Performance| `etcd_server_proposals_committed_total`           | Number of proposals committed                     | Sudden drop        | Critical  | Sudden drop for 2 intervals       | Cluster writes failing, risking data consistency|
+| Performance| `etcd_server_proposals_failed_total`               | Number of failed proposals                        | >0 for 5 minutes   | Critical  | >0 for 5 minutes                  | Write failures, risking cluster stability       |
+| Performance| `etcd_server_leader_changes_seen_total`            | Number of leader elections                        | >3 in 5 min        | Critical  | >3 leader changes in 5 minutes    | Leader instability causing cluster disruption   |
+| Health      | `etcd_server_has_leader`                            | Indicates if etcd has a leader (1=leader exists) | 0 (no leader)      | Critical  | 0 for 2 consecutive intervals     | Cluster not functional without leader           |
+| Health      | `etcd_server_is_learner`                            | Is the node a learner                             | 1 (true)           | Warning   | Learner status persists >10 mins | Node not fully participating in quorum           |
+| Health      | `etcd_mvcc_db_total_size_in_bytes`                  | Size of etcd database                             | Growth >20% in 1 hr| Warning   | Rapid growth triggers alert       | Potential storage bloat, disk pressure           |
+| Health      | `etcd_mvcc_snap_save_total_duration_seconds`        | Snapshot save duration                            | >10s               | Warning   | >10s for 2 intervals              | Slow snapshots, risking backups                  |
+| Security    | `etcd_server_failed_auth_requests_total`            | Failed authentication requests                    | >0                 | Warning   | Any failure                      | Unauthorized access attempts                      |
+| Security    | `etcd_grpc_authenticate_requests_failed_total`      | gRPC authentication failures                      | >0                 | Warning   | Any failure                      | Authentication issues on gRPC                     |
+| Usage       | `etcd_debugging_mvcc_db_compaction_pause_duration_seconds` | Duration of compaction pauses                    | >2s                | Warning   | >2s for 2 intervals               | Cluster slowdown during compactions               |
+| Usage       | `etcd_network_client_grpc_closed_streams_total`      | Number of closed gRPC streams                      | Spike >10/min       | Warning   | Spike lasting >5 minutes          | Client connection instability                      |
 
 ---
 
 ## Explanation of Key Metrics
 
-- **Workqueue Depth & Length:**  
-  These metrics track the depth and number of tasks pending in controller queues. High values indicate that the controllers are overwhelmed and unable to keep up with cluster changes, leading to stale or delayed state reconciliation.
-- **Workqueue Latency:**  
-  Time taken to process workqueue items. High latency affects cluster responsiveness and resource consistency.
-- **Reconcile Errors:**  
-  Indicates failed attempts to reconcile cluster resources. A high rate suggests controllers are struggling to maintain desired state.
-- **Reconcile Duration:**  
-  The time each reconciliation loop takes. Longer durations indicate potential performance issues.
-- **Resource Usage (CPU/Memory):**  
-  Measures resource consumption of the controller manager. Excessive usage can lead to degraded performance or crashes.
-- **Go Goroutines:**  
-  Tracks the number of active goroutines. An unusually high count may reveal resource leaks.
-- **TLS Handshake, Authentication, Authorization Errors:**  
-  Failures here indicate possible security issues or misconfiguration, impacting secure communications.
-- **Leader Elections:**  
-  Ensures only one active controller manager instance. Failures may result in controller instability or failover issues.
+- **Disk WAL & Backend Commit Duration:**  
+  Measures disk I/O latency on WAL writes and backend commits. High latency indicates storage bottlenecks risking data durability.
 
----
+- **Network Client Traffic (gRPC bytes sent/received):**  
+  Tracks network throughput of etcd clients. Sudden spikes may suggest increased load or network issues.
 
-Let me know if you'd like me to add Prometheus alerting examples or extend monitoring recommendations!
+- **Proposals Committed/Failed:**  
+  Reflects the number of successful and failed write proposals to the etcd cluster. Failures impact cluster consistency and availability.
+
+- **Leader Changes & Leader Presence:**  
+  Tracks leadership stability. Frequent leader changes or absence of a leader cause cluster disruptions.
+
+- **Learner Status:**  
+  Identifies nodes not fully participating in consensus, potentially reducing cluster reliability.
+
+- **Database Size & Snapshots:**  
+  Indicates data size growth and snapshot performance. Rapid growth or slow snapshots can degrade cluster performance.
+
+- **Authentication Failures:**  
+  Monitors security-related failed auth attempts, indicating potential attacks or misconfigurations.
+
+- **Compaction Pause Duration:**  
+  Time spent pausing during MVCC compactions, which may temporarily degrade performance.
+
+- **Closed gRPC Streams:**  
+  Frequent closed streams could indicate network instability or client issues.
