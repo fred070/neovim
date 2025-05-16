@@ -1,23 +1,24 @@
-# NGINX Ingress Controller Metrics (Per Hostname)
+# Latency Metrics Overview
 
-This section outlines key metrics to monitor for the NGINX Ingress Controller in your Kubernetes cluster, including per-hostname breakdowns to help isolate issues by virtual host. Monitoring these metrics ensures availability, performance, and stability of ingress traffic.
+Latency metrics measure the time delays in processing requests or operations. Monitoring latency is critical for understanding application responsiveness and user experience.
 
-| Category     | Metric                                               | Description                                           | Threshold                     | Severity  | Alert Condition                         | User Impact                                              |
-|--------------|------------------------------------------------------|-------------------------------------------------------|-------------------------------|-----------|----------------------------------------|----------------------------------------------------------|
-| Network Usage| `nginx_ingress_controller_requests{host="<hostname>"}` | Total HTTP requests handled by NGINX Ingress per hostname. Helps identify traffic spikes or DDoS attempts targeted at specific domains. | > baseline + 2x std dev        | Warning   | Spike over 3 consecutive intervals     | Possible burst traffic or DDoS impacting specific hostname availability.      |
-| Network Usage| `nginx_ingress_controller_request_duration_seconds{host="<hostname>"}` | Request processing latency measured at the 95th percentile per hostname. High latency impacts user experience. | 95th percentile > 1s           | Warning   | Sustained over 2 consecutive intervals | Users accessing this hostname may experience slow page loads or timeouts.    |
-| Availability| `nginx_ingress_controller_upstream_errors_total{host="<hostname>"}` | Number of errors connecting to backend services per hostname. Reflects backend availability issues or misconfiguration. | > 1% error rate                | Critical  | Exceeds threshold for 5 minutes        | Backend failures cause downtime or degraded functionality on affected host.  |
-| Stability   | `nginx_ingress_controller_config_last_reload_successful` | Indicates whether the last ingress controller configuration reload was successful. A failed reload could mean configuration errors. | False                         | Critical  | On any failed reload                   | Misconfiguration could cause ingress outages or degraded service routing.    |
-| Network Usage| `nginx_ingress_controller_connections_active`        | Number of active client connections handled by the ingress controller. High connection counts can indicate load spikes or leaks. | > expected max connections     | Warning   | Sustained over 3 consecutive intervals | Potential overload or connection management issues affecting ingress stability. |
-| Availability| `nginx_ingress_controller_failure_rate{host="<hostname>"}` | Ratio of failed requests to total requests per hostname, indicating request failures or client errors impacting service quality. | > 5%                         | Critical  | Breach sustained over 5 minutes         | High error rates leading to poor user experience and possible SLA violations. |
+| Category         | Metric                                          | Description                                           | Threshold                    | Severity  | Alert Condition                         | User Impact                                                |
+|------------------|-------------------------------------------------|-------------------------------------------------------|------------------------------|-----------|----------------------------------------|------------------------------------------------------------|
+| API Server       | `apiserver_request_duration_seconds`            | Histogram of request latencies for Kubernetes API calls, broken down by verb and resource. | 95th percentile > 1s          | Warning   | Sustained over 2 consecutive intervals | API clients may experience slow responses, affecting controllers and kubectl commands. |
+| API Server       | `apiserver_longrunning_gauge`                    | Number of long-running requests currently in flight.  | > 10                         | Warning   | Sustained for 3 intervals              | Backend slowdowns causing delayed API responses.           |
+| Controller Manager | `controller_manager_queue_duration_seconds`    | Time items spend in controller queue before processing.| 95th percentile > 2s          | Warning   | Sustained over 3 intervals             | Delayed controller reconciliation affecting resource state.|
+| Scheduler        | `scheduler_schedule_attempt_duration_seconds`   | Time taken by the scheduler to attempt scheduling a pod.| 95th percentile > 1s          | Warning   | Sustained over 2 intervals             | Scheduling delays causing pod startup latency.             |
+| Ingress / Proxy  | `nginx_ingress_controller_request_duration_seconds` | Request processing latency in the NGINX ingress controller. | 95th percentile > 1s          | Warning   | Sustained over 2 intervals             | Slow page loads impacting end-user experience.             |
+| Node (Kubelet)   | `kubelet_runtime_operations_duration_seconds`   | Latency of container runtime operations (e.g., start, stop). | 95th percentile > 1s          | Warning   | Sustained over 2 intervals             | Delayed container lifecycle events impacting workload readiness. |
+| Pod / Container  | Custom application latency metrics (e.g., HTTP request duration) | Application-specific request or processing latency measured via instrumentation. | Depends on SLA                | Warning   | Sustained degradation                  | End users experience slow application response times.      |
 
 ---
 
-### Explanation
+### Notes:
 
-- **Per Hostname Metrics:** Using the `host` label allows granular monitoring by virtual host or domain. This helps quickly pinpoint which services are experiencing issues without affecting the entire ingress.
-- **Thresholds and Severity:** Thresholds are suggested starting points and should be tuned based on typical traffic patterns and SLA requirements. Critical severity implies immediate action needed.
-- **Alert Conditions:** Alerts trigger after thresholds are met for multiple consecutive evaluation intervals, reducing noise from transient spikes.
-- **User Impact:** Descriptions explain the end-user or service impact, aiding in prioritizing response and remediation efforts.
+- **Percentile Metrics:** Using 95th percentile or higher captures tail latency, which affects user experience more than average latency.
+- **Sustained Thresholds:** Alert conditions require the latency to be above threshold for multiple consecutive evaluation intervals to avoid false positives.
+- **Latency Context:** Latency impacts both system components (e.g., API server) and end-user experience (e.g., ingress latency, application latency).
+- **Custom Metrics:** Instrumenting your applications with latency metrics is highly recommended for full observability.
 
-Monitoring these metrics closely helps maintain a healthy ingress layer, ensuring reliable and performant traffic routing to backend services.
+Monitoring latency across these layers helps quickly detect performance regressions and bottlenecks in your Kubernetes environment.
