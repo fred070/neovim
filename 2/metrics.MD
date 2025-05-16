@@ -1,42 +1,34 @@
-# ❗ Error Rate Metrics (Including Ingress Hostnames)
+# 📥 Queue Length & Saturation Metrics
 
-| Layer      | Category     | Metric                                                                                                      | Description                                                                     | Threshold                     | Severity | Alert Condition                          | User Impact                                                  |
-|------------|--------------|--------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|-------------------------------|----------|------------------------------------------|---------------------------------------------------------------|
-| Cluster    | API Errors   | `apiserver_request_errors_total`                                                                            | Total number of failed API server requests                                      | >5% of total requests         | Critical | >5% error rate over 5 mins                | API availability issues, degraded cluster functionality       |
-| Cluster    | Scheduler    | `scheduler_schedule_attempts_failed_total`                                                                  | Failed pod scheduling attempts                                                  | >10 failures per min          | Warning  | Sustained for 3 intervals                 | Pods remain pending or unscheduled                           |
-| Node       | Kubelet      | `kubelet_runtime_errors_total`                                                                              | Kubelet runtime errors (e.g. container start failures)                          | >0 in 5 minutes               | Warning  | Any increase in 5-minute window          | Pods may fail to start or restart frequently                 |
-| Pod        | Application  | `http_requests_total{status=~"5..",pod=...}`                                                                | 5xx application-level HTTP errors                                               | >1% of total requests         | Warning  | Sustained for 3 intervals                 | Application degradation, bad user experience                 |
-| Container  | App Errors   | `container_restart_count`                                                                                   | Restarts due to crash or failure                                                | >3 restarts in 5 mins         | Warning  | More than 3 restarts in 5 mins           | Unstable container or failing application                    |
-| Ingress    | HTTP Errors  | `nginx_ingress_controller_requests{status=~"5..",host="example.com"}`                                       | 5xx errors served by ingress controller per hostname                            | >2% of total requests         | Warning  | Sustained for 5 mins                     | Application unavailable or backend failure for that domain   |
-| Ingress    | Error Ratio  | `rate(nginx_ingress_controller_requests{status=~"5..",host="example.com"}[5m]) / rate(nginx_ingress_controller_requests{host="example.com"}[5m])` | Failure ratio per hostname | >0.02 (2%)                     | Warning  | Breach over 2 consecutive windows         | Ingress traffic is failing for specific route/domain         |
+| Layer      | Category       | Metric                                                                 | Description                                                       | Threshold                     | Severity | Alert Condition                            | User Impact                                                     |
+|------------|----------------|-------------------------------------------------------------------------|-------------------------------------------------------------------|-------------------------------|----------|--------------------------------------------|------------------------------------------------------------------|
+| Cluster    | API Saturation | `apiserver_current_inflight_requests{request_kind="mutating"}`         | Number of in-flight mutating requests (e.g., POST, PUT, DELETE)  | >80% of configured max        | Warning  | Sustained high usage for 3 intervals        | API responsiveness degradation for write operations              |
+| Cluster    | API Saturation | `apiserver_current_inflight_requests{request_kind="non-mutating"}`     | In-flight non-mutating requests (e.g., GET, LIST, WATCH)          | >90% of configured max        | Warning  | High sustained load over 5 minutes          | Read operation latency, 429 errors likely                       |
+| Cluster    | API Queue      | `apiserver_request_queue_length` *(if custom instrumented)*            | Length of API server internal request queue                       | >100                          | Warning  | Queue length exceeds threshold for 3 mins   | Delays in processing incoming requests                           |
+| Scheduler  | Scheduling     | `scheduler_pending_pods` *(custom)*                                     | Number of pods pending scheduling                                 | >50 pods                      | Warning  | Sustained over 5 mins                      | Scheduling bottlenecks, resource contention                      |
+| Kubelet    | Pod Launch     | `kubelet_pod_worker_duration_seconds_bucket`                           | Time kubelet takes to start a pod (saturation proxy)              | >95th percentile >10s         | Warning  | Sustained over 3 intervals                  | Node under pressure or disk/network I/O latency                 |
+| Ingress    | Request Queue  | `nginx_ingress_controller_request_duration_seconds_bucket`             | Ingress request latency (proxy to backend queue pressure)         | 95th percentile > 1s          | Warning  | Sustained over 3 intervals                  | Backend apps overwhelmed or slow                                |
 
 ---
 
 ## ℹ️ Explanations
 
-### What are Error Rate Metrics?
-Error rate metrics quantify how often operations fail, whether at the cluster level (e.g., failed API calls), workload level (e.g., pod restarts), or application level (e.g., HTTP 5xx responses).
+### What is Queue Length?
+Queue length represents the number of operations waiting to be processed. This can include:
 
-### Why They're Important:
-High error rates often indicate degraded service, broken dependencies, misconfigurations, or failing components. Monitoring and alerting on error rates is critical for:
+- API requests pending in the server
+- Pods waiting to be scheduled
+- Network requests pending at ingress
 
-- Ensuring high availability
-- Rapid failure detection
-- Maintaining SLAs/SLOs
-- Prioritizing recovery efforts
+High queue length usually indicates **resource contention**, **insufficient capacity**, or **upstream bottlenecks**.
 
-### Why Include Hostname in Ingress Metrics?
-In environments using Ingress (e.g., NGINX Ingress Controller), traffic may be routed based on hostname (e.g., `app.tenant-a.com`). Monitoring per-hostname error rates enables:
+### What is Saturation?
+Saturation is a measure of how full a system or component is relative to its capacity. It's part of the **USE Method** (Utilization, Saturation, Errors) for performance monitoring.
 
-- Isolation of issues affecting specific domains or tenants
-- Better troubleshooting of multi-tenant environments
-- Detection of failing deployments or misrouted traffic
+- A component is saturated when it's running at full capacity and requests must queue.
+- Examples include CPU saturation, API server inflight request limits, and ingress latency.
 
-### Severity and Impact
-Severity is based on threshold breaches and scope of impact:
-
-- **Critical**: Affects major functionality or a large part of the cluster (e.g., API failures).
-- **Warning**: Localized or temporary issues (e.g., pod restart spikes, ingress errors).
-- **Alert Conditions** ensure that metrics are evaluated over sustained intervals to reduce false positives.
-
-Let me know if you'd like this integrated into your full observability documentation or exported to a file.
+### Why Monitor These?
+- Prevent slowdowns or unresponsiveness under load.
+- Detect resource bottlenecks early.
+- Ensure systems can scale with demand.
