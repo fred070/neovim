@@ -1,24 +1,33 @@
-# Latency Metrics Overview
+# 🚀 Throughput Metrics (Including Disk I/O)
 
-Latency metrics measure the time delays in processing requests or operations. Monitoring latency is critical for understanding application responsiveness and user experience.
-
-| Category         | Metric                                          | Description                                           | Threshold                    | Severity  | Alert Condition                         | User Impact                                                |
-|------------------|-------------------------------------------------|-------------------------------------------------------|------------------------------|-----------|----------------------------------------|------------------------------------------------------------|
-| API Server       | `apiserver_request_duration_seconds`            | Histogram of request latencies for Kubernetes API calls, broken down by verb and resource. | 95th percentile > 1s          | Warning   | Sustained over 2 consecutive intervals | API clients may experience slow responses, affecting controllers and kubectl commands. |
-| API Server       | `apiserver_longrunning_gauge`                    | Number of long-running requests currently in flight.  | > 10                         | Warning   | Sustained for 3 intervals              | Backend slowdowns causing delayed API responses.           |
-| Controller Manager | `controller_manager_queue_duration_seconds`    | Time items spend in controller queue before processing.| 95th percentile > 2s          | Warning   | Sustained over 3 intervals             | Delayed controller reconciliation affecting resource state.|
-| Scheduler        | `scheduler_schedule_attempt_duration_seconds`   | Time taken by the scheduler to attempt scheduling a pod.| 95th percentile > 1s          | Warning   | Sustained over 2 intervals             | Scheduling delays causing pod startup latency.             |
-| Ingress / Proxy  | `nginx_ingress_controller_request_duration_seconds` | Request processing latency in the NGINX ingress controller. | 95th percentile > 1s          | Warning   | Sustained over 2 intervals             | Slow page loads impacting end-user experience.             |
-| Node (Kubelet)   | `kubelet_runtime_operations_duration_seconds`   | Latency of container runtime operations (e.g., start, stop). | 95th percentile > 1s          | Warning   | Sustained over 2 intervals             | Delayed container lifecycle events impacting workload readiness. |
-| Pod / Container  | Custom application latency metrics (e.g., HTTP request duration) | Application-specific request or processing latency measured via instrumentation. | Depends on SLA                | Warning   | Sustained degradation                  | End users experience slow application response times.      |
+| Layer      | Category           | Metric                                               | Description                                                        | Threshold                    | Severity | Alert Condition                          | User Impact                                                   |
+|------------|--------------------|-------------------------------------------------------|--------------------------------------------------------------------|------------------------------|----------|------------------------------------------|----------------------------------------------------------------|
+| Cluster    | Network Throughput | `cluster_network_receive_bytes_total`               | Total incoming traffic across the cluster                          | 2x baseline                  | Info     | Sustained for 5 minutes                  | Potential traffic spike or DDoS                               |
+| Cluster    | Network Throughput | `cluster_network_transmit_bytes_total`              | Total outgoing traffic across the cluster                          | 2x baseline                  | Info     | Sustained for 5 minutes                  | May indicate egress load increase                             |
+| Node       | Disk I/O           | `node_disk_read_bytes_total`                         | Total number of bytes read from disk on the node                   | >500MB/s                     | Warning  | Sustained 3 intervals                    | Disk contention, slow I/O operations                         |
+| Node       | Disk I/O           | `node_disk_written_bytes_total`                      | Total number of bytes written to disk on the node                  | >500MB/s                     | Warning  | Sustained 3 intervals                    | High disk activity may affect workload performance           |
+| Pod        | Network Throughput | `container_network_receive_bytes_total{pod=...}`     | Ingress network throughput per pod                                 | 2x baseline                  | Warning  | Sustained for 3 intervals                | May affect application responsiveness                        |
+| Pod        | Network Throughput | `container_network_transmit_bytes_total{pod=...}`    | Egress network throughput per pod                                  | 2x baseline                  | Warning  | Sustained for 3 intervals                | Could indicate data exfiltration or load                     |
+| Container  | Disk I/O           | `container_fs_reads_bytes_total`                     | Disk reads by individual container                                 | >200MB/min                   | Warning  | Exceeds threshold 3 times                | May indicate disk-heavy workload                             |
+| Container  | Disk I/O           | `container_fs_writes_bytes_total`                    | Disk writes by individual container                                | >200MB/min                   | Warning  | Exceeds threshold 3 times                | Risk of storage pressure                                     |
 
 ---
 
-### Notes:
+## ℹ️ Explanation
 
-- **Percentile Metrics:** Using 95th percentile or higher captures tail latency, which affects user experience more than average latency.
-- **Sustained Thresholds:** Alert conditions require the latency to be above threshold for multiple consecutive evaluation intervals to avoid false positives.
-- **Latency Context:** Latency impacts both system components (e.g., API server) and end-user experience (e.g., ingress latency, application latency).
-- **Custom Metrics:** Instrumenting your applications with latency metrics is highly recommended for full observability.
+**Throughput metrics** help quantify the volume of data being transferred or processed over time. These include network traffic (ingress/egress) and disk input/output (read/write). High throughput isn't inherently bad, but unexpected spikes or sustained high activity can point to:
 
-Monitoring latency across these layers helps quickly detect performance regressions and bottlenecks in your Kubernetes environment.
+- Misconfigured applications
+- Data-intensive workloads
+- Network bottlenecks or failures
+- Disk saturation and slow performance
+
+### Key Monitoring Drivers
+
+- **Cluster-level** throughput gives a view of the entire environment’s load.
+- **Node-level** I/O helps identify local saturation issues or noisy neighbors.
+- **Pod and container-level** data provides visibility into specific workload behavior and anomalies.
+
+Thresholds are set based on environment baselines or acceptable operating ranges. Alerts should trigger only after sustained anomalies to avoid false positives. Severity levels indicate the urgency and expected operational impact.
+
+Let me know if you'd like this as a downloadable `.md` file or want to expand on any specific layer (e.g., ingress controller, tenants, etc.).
