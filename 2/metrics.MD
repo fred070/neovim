@@ -1,33 +1,42 @@
-# 🚀 Throughput Metrics (Including Disk I/O)
+# ❗ Error Rate Metrics (Including Ingress Hostnames)
 
-| Layer      | Category           | Metric                                               | Description                                                        | Threshold                    | Severity | Alert Condition                          | User Impact                                                   |
-|------------|--------------------|-------------------------------------------------------|--------------------------------------------------------------------|------------------------------|----------|------------------------------------------|----------------------------------------------------------------|
-| Cluster    | Network Throughput | `cluster_network_receive_bytes_total`               | Total incoming traffic across the cluster                          | 2x baseline                  | Info     | Sustained for 5 minutes                  | Potential traffic spike or DDoS                               |
-| Cluster    | Network Throughput | `cluster_network_transmit_bytes_total`              | Total outgoing traffic across the cluster                          | 2x baseline                  | Info     | Sustained for 5 minutes                  | May indicate egress load increase                             |
-| Node       | Disk I/O           | `node_disk_read_bytes_total`                         | Total number of bytes read from disk on the node                   | >500MB/s                     | Warning  | Sustained 3 intervals                    | Disk contention, slow I/O operations                         |
-| Node       | Disk I/O           | `node_disk_written_bytes_total`                      | Total number of bytes written to disk on the node                  | >500MB/s                     | Warning  | Sustained 3 intervals                    | High disk activity may affect workload performance           |
-| Pod        | Network Throughput | `container_network_receive_bytes_total{pod=...}`     | Ingress network throughput per pod                                 | 2x baseline                  | Warning  | Sustained for 3 intervals                | May affect application responsiveness                        |
-| Pod        | Network Throughput | `container_network_transmit_bytes_total{pod=...}`    | Egress network throughput per pod                                  | 2x baseline                  | Warning  | Sustained for 3 intervals                | Could indicate data exfiltration or load                     |
-| Container  | Disk I/O           | `container_fs_reads_bytes_total`                     | Disk reads by individual container                                 | >200MB/min                   | Warning  | Exceeds threshold 3 times                | May indicate disk-heavy workload                             |
-| Container  | Disk I/O           | `container_fs_writes_bytes_total`                    | Disk writes by individual container                                | >200MB/min                   | Warning  | Exceeds threshold 3 times                | Risk of storage pressure                                     |
+| Layer      | Category     | Metric                                                                                                      | Description                                                                     | Threshold                     | Severity | Alert Condition                          | User Impact                                                  |
+|------------|--------------|--------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|-------------------------------|----------|------------------------------------------|---------------------------------------------------------------|
+| Cluster    | API Errors   | `apiserver_request_errors_total`                                                                            | Total number of failed API server requests                                      | >5% of total requests         | Critical | >5% error rate over 5 mins                | API availability issues, degraded cluster functionality       |
+| Cluster    | Scheduler    | `scheduler_schedule_attempts_failed_total`                                                                  | Failed pod scheduling attempts                                                  | >10 failures per min          | Warning  | Sustained for 3 intervals                 | Pods remain pending or unscheduled                           |
+| Node       | Kubelet      | `kubelet_runtime_errors_total`                                                                              | Kubelet runtime errors (e.g. container start failures)                          | >0 in 5 minutes               | Warning  | Any increase in 5-minute window          | Pods may fail to start or restart frequently                 |
+| Pod        | Application  | `http_requests_total{status=~"5..",pod=...}`                                                                | 5xx application-level HTTP errors                                               | >1% of total requests         | Warning  | Sustained for 3 intervals                 | Application degradation, bad user experience                 |
+| Container  | App Errors   | `container_restart_count`                                                                                   | Restarts due to crash or failure                                                | >3 restarts in 5 mins         | Warning  | More than 3 restarts in 5 mins           | Unstable container or failing application                    |
+| Ingress    | HTTP Errors  | `nginx_ingress_controller_requests{status=~"5..",host="example.com"}`                                       | 5xx errors served by ingress controller per hostname                            | >2% of total requests         | Warning  | Sustained for 5 mins                     | Application unavailable or backend failure for that domain   |
+| Ingress    | Error Ratio  | `rate(nginx_ingress_controller_requests{status=~"5..",host="example.com"}[5m]) / rate(nginx_ingress_controller_requests{host="example.com"}[5m])` | Failure ratio per hostname | >0.02 (2%)                     | Warning  | Breach over 2 consecutive windows         | Ingress traffic is failing for specific route/domain         |
 
 ---
 
-## ℹ️ Explanation
+## ℹ️ Explanations
 
-**Throughput metrics** help quantify the volume of data being transferred or processed over time. These include network traffic (ingress/egress) and disk input/output (read/write). High throughput isn't inherently bad, but unexpected spikes or sustained high activity can point to:
+### What are Error Rate Metrics?
+Error rate metrics quantify how often operations fail, whether at the cluster level (e.g., failed API calls), workload level (e.g., pod restarts), or application level (e.g., HTTP 5xx responses).
 
-- Misconfigured applications
-- Data-intensive workloads
-- Network bottlenecks or failures
-- Disk saturation and slow performance
+### Why They're Important:
+High error rates often indicate degraded service, broken dependencies, misconfigurations, or failing components. Monitoring and alerting on error rates is critical for:
 
-### Key Monitoring Drivers
+- Ensuring high availability
+- Rapid failure detection
+- Maintaining SLAs/SLOs
+- Prioritizing recovery efforts
 
-- **Cluster-level** throughput gives a view of the entire environment’s load.
-- **Node-level** I/O helps identify local saturation issues or noisy neighbors.
-- **Pod and container-level** data provides visibility into specific workload behavior and anomalies.
+### Why Include Hostname in Ingress Metrics?
+In environments using Ingress (e.g., NGINX Ingress Controller), traffic may be routed based on hostname (e.g., `app.tenant-a.com`). Monitoring per-hostname error rates enables:
 
-Thresholds are set based on environment baselines or acceptable operating ranges. Alerts should trigger only after sustained anomalies to avoid false positives. Severity levels indicate the urgency and expected operational impact.
+- Isolation of issues affecting specific domains or tenants
+- Better troubleshooting of multi-tenant environments
+- Detection of failing deployments or misrouted traffic
 
-Let me know if you'd like this as a downloadable `.md` file or want to expand on any specific layer (e.g., ingress controller, tenants, etc.).
+### Severity and Impact
+Severity is based on threshold breaches and scope of impact:
+
+- **Critical**: Affects major functionality or a large part of the cluster (e.g., API failures).
+- **Warning**: Localized or temporary issues (e.g., pod restart spikes, ingress errors).
+- **Alert Conditions** ensure that metrics are evaluated over sustained intervals to reduce false positives.
+
+Let me know if you'd like this integrated into your full observability documentation or exported to a file.
